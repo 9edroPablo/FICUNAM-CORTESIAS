@@ -1,0 +1,28 @@
+# Dependencias (Ignora node_modules en cliente y backend)
+node_modules/
+
+# Archivos de entorno (CRÍTICO: Protege tus contraseñas de MongoDB y SMTP)
+.env
+.env.*
+!.env.example
+
+# Salidas de compilación de producción (Para tu frontend en Vite)
+dist/
+build/
+dist-ssr/
+
+# Caché de herramientas
+.vite/
+.eslintcache
+
+# Logs de depuración
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Archivos del sistema operativo (macOS)
+.DS_Store
+
+# Configuraciones de editores de código
+.vscode/
+.idea/
