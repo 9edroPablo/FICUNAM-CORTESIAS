@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.font-ficunam-display {
+  font-family: 'Syne', 'Space Grotesk', sans-serif;
+}
+
+.font-ficunam-sans {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-container {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 2px solid #000000 !important;
+    box-shadow: none !important;
+  }
+  .print-text-dark {
+    color: #000000 !important;
+  }
+  .print-table th,
+  .print-table td {
+    border-color: #000000 !important;
+    color: #000000 !important;
+  }
+}
