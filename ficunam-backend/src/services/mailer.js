@@ -10,23 +10,10 @@ export async function sendInvitationEmail({
   deadlineFormatted,
   confirmUrl
 }) {
-  // Recargar variables de entorno por si cambiaron en .env
   dotenv.config();
 
-  const port = Number(process.env.SMTP_PORT) || 587;
-  const isSecure = port === 465 || process.env.SMTP_SECURE === 'true';
-
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port,
-    secure: isSecure,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS
-    }
-  });
-
   const sender = process.env.SMTP_USER || 'asistencia.direccionejecutiva@fic.unam.mx';
+  const resendApiKey = process.env.RESEND_API_KEY;
 
   const htmlTemplate = `
   <!DOCTYPE html>
@@ -105,6 +92,47 @@ export async function sendInvitationEmail({
   </html>
   `;
 
+  // 1. Envío prioritario vía Resend API (HTTP 443, inmune a bloqueos de Render)
+  if (resendApiKey) {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'FICUNAM Cortesías <onboarding@resend.dev>',
+        to: [courtesy.correo],
+        subject: `[FICUNAM · ${courtesy.categoria.toUpperCase()}] Invitación personal a la función "${screening.pelicula}"`,
+        html: htmlTemplate
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(`Resend API Error: ${JSON.stringify(data)}`);
+    }
+    console.log('📧 Correo enviado vía Resend HTTPS a:', courtesy.correo, '| ID:', data.id);
+    return data;
+  }
+
+  // 2. Respaldo vía Nodemailer SMTP tradicional (para pruebas en localhost)
+  const port = Number(process.env.SMTP_PORT) || 587;
+  const isSecure = port === 465 || process.env.SMTP_SECURE === 'true';
+
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port,
+    secure: isSecure,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 8000,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS
+    }
+  });
+
   const info = await transporter.sendMail({
     from: `"Dirección Ejecutiva FICUNAM" <${sender}>`,
     to: courtesy.correo,
@@ -112,6 +140,6 @@ export async function sendInvitationEmail({
     html: htmlTemplate
   });
 
-  console.log('📧 Correo enviado exitosamente a:', courtesy.correo, '| ID:', info.messageId);
+  console.log('📧 Correo enviado vía SMTP a:', courtesy.correo, '| ID:', info.messageId);
   return info;
 }
