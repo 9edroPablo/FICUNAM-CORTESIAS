@@ -12,8 +12,13 @@ export async function sendInvitationEmail({
 }) {
   dotenv.config();
 
-  const sender = process.env.SMTP_USER || 'asistencia.direccionejecutiva@fic.unam.mx';
+  // Correo remitente verificado en Brevo (o SMTP)
+  const senderEmail = process.env.SMTP_USER || 'pedropablopep@gmail.com';
+  const senderName = 'Dirección Ejecutiva FICUNAM';
+  const brevoApiKey = process.env.BREVO_API_KEY;
   const resendApiKey = process.env.RESEND_API_KEY;
+
+  const subject = `[FICUNAM · ${courtesy.categoria.toUpperCase()}] Invitación personal a la función "${screening.pelicula}"`;
 
   const htmlTemplate = `
   <!DOCTYPE html>
@@ -80,7 +85,7 @@ export async function sendInvitationEmail({
             </tr>
             <tr>
               <td style="border-top: 1px solid #333333; padding-top: 16px; font-size:11px; color:#888888; text-align:center;">
-                Dirección Ejecutiva FICUNAM · ${sender}<br/>
+                Dirección Ejecutiva FICUNAM · asistencia.direccionejecutiva@fic.unam.mx<br/>
                 Centro Cultural Universitario, UNAM
               </td>
             </tr>
@@ -92,7 +97,40 @@ export async function sendInvitationEmail({
   </html>
   `;
 
-  // 1. Envío prioritario vía Resend API (HTTP 443, inmune a bloqueos de Render)
+  // 1. Envío vía Brevo API (HTTPS 443 - Permite enviar a CUALQUIER correo sin comprar dominio)
+  if (brevoApiKey) {
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': brevoApiKey,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: {
+          name: senderName,
+          email: senderEmail
+        },
+        to: [
+          {
+            email: courtesy.correo,
+            name: courtesy.nombre
+          }
+        ],
+        subject,
+        htmlContent: htmlTemplate
+      })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(`Brevo API Error: ${JSON.stringify(data)}`);
+    }
+    console.log('📧 Correo enviado vía Brevo HTTPS a:', courtesy.correo, '| ID:', data.messageId);
+    return data;
+  }
+
+  // 2. Respaldo Resend (Solo envía al correo propio si no hay dominio verificado)
   if (resendApiKey) {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -103,7 +141,7 @@ export async function sendInvitationEmail({
       body: JSON.stringify({
         from: 'FICUNAM Cortesías <onboarding@resend.dev>',
         to: [courtesy.correo],
-        subject: `[FICUNAM · ${courtesy.categoria.toUpperCase()}] Invitación personal a la función "${screening.pelicula}"`,
+        subject,
         html: htmlTemplate
       })
     });
@@ -116,7 +154,7 @@ export async function sendInvitationEmail({
     return data;
   }
 
-  // 2. Respaldo vía Nodemailer SMTP tradicional (para pruebas en localhost)
+  // 3. Respaldo Nodemailer SMTP (para entorno local)
   const port = Number(process.env.SMTP_PORT) || 587;
   const isSecure = port === 465 || process.env.SMTP_SECURE === 'true';
 
@@ -134,9 +172,9 @@ export async function sendInvitationEmail({
   });
 
   const info = await transporter.sendMail({
-    from: `"Dirección Ejecutiva FICUNAM" <${sender}>`,
+    from: `"${senderName}" <${senderEmail}>`,
     to: courtesy.correo,
-    subject: `[FICUNAM · ${courtesy.categoria.toUpperCase()}] Invitación personal a la función "${screening.pelicula}"`,
+    subject,
     html: htmlTemplate
   });
 
