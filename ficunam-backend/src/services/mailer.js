@@ -1,4 +1,4 @@
-export const SALAS_MAP = {
+const SALAS_MAP = {
   'julio-bracho': 'Sala Julio Bracho (CCU)',
   'jose-revueltas': 'Sala José Revueltas (CCU)',
   'carlos-monsivais': 'Sala Carlos Monsiváis (CCU)',
@@ -8,7 +8,7 @@ export const SALAS_MAP = {
   'cinematografo-del-chopo': 'Cinematógrafo del Chopo'
 };
 
-export async function sendInvitationEmail(courtesy, screening) {
+async function sendInvitationEmail(courtesy, screening) {
   const brevoApiKey = process.env.BREVO_API_KEY;
   const senderEmail = process.env.SMTP_USER || 'invitaciones@ficunam-cortesias.lat';
   const senderName = 'Dirección Ejecutiva FICUNAM';
@@ -94,20 +94,9 @@ export async function sendInvitationEmail(courtesy, screening) {
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      sender: {
-        name: senderName,
-        email: senderEmail
-      },
-      replyTo: {
-        name: 'Dirección Ejecutiva FICUNAM',
-        email: 'asistencia.direccionejecutiva@fic.unam.mx'
-      },
-      to: [
-        {
-          email: courtesy.correo,
-          name: courtesy.nombre
-        }
-      ],
+      sender: { name: senderName, email: senderEmail },
+      replyTo: { name: 'Dirección Ejecutiva FICUNAM', email: 'asistencia.direccionejecutiva@fic.unam.mx' },
+      to: [{ email: courtesy.correo, name: courtesy.nombre }],
       subject,
       htmlContent: htmlTemplate,
       textContent: textTemplate
@@ -122,3 +111,5 @@ export async function sendInvitationEmail(courtesy, screening) {
   console.log(`📧 Correo enviado vía Brevo HTTPS a ${courtesy.correo}`);
   return true;
 }
+
+module.exports = { sendInvitationEmail, SALAS_MAP };
