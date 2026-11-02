@@ -2,7 +2,7 @@
   "name": "ficunam-backend",
   "version": "1.0.0",
   "description": "API REST y servidor de correos para Sistema de Cortesias FICUNAM",
-  "type": "module",
+  "type": "commonjs",
   "main": "src/server.js",
   "scripts": {
     "dev": "node --watch src/server.js",
