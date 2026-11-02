@@ -30,6 +30,8 @@ export default function ResumenView({ screenings, salas = SALAS_CCU, courtesies 
         screening: s,
         sala,
         aforoTexto: sala?.tipo === 'libre' ? 'Aire libre (Sin aforo fijo)' : `${sala?.aforo || '-'} lugares`,
+        cortesiasAsignadas: allForScreening.length,
+        limiteCortesias: s.limiteCortesias || null,
         boletosReservados: acceptedForScreening.length,
         categoryCounts,
         totalEntregados: deliveredAndAccepted.length
@@ -46,6 +48,8 @@ export default function ResumenView({ screenings, salas = SALAS_CCU, courtesies 
       Horario: `${row.screening.hora} hrs`,
       Sala: row.sala?.nombre || row.screening.salaId,
       Aforo: row.aforoTexto,
+      'Cortesías Asignadas (Enviadas)': row.cortesiasAsignadas,
+      'Límite de Cortesías': row.limiteCortesias || 'Sin límite',
       'Boletos Reservados (Aceptados)': row.boletosReservados,
       Invitados: row.categoryCounts.Invitados,
       Aliados: row.categoryCounts.Aliados,
@@ -71,7 +75,7 @@ export default function ResumenView({ screenings, salas = SALAS_CCU, courtesies 
             Resumen de Funciones, Aforos y Cortesías Entregadas
           </h2>
           <p className="text-xs text-[#F4F0EA]/70 mt-1 print-text-dark">
-            Las columnas por categoría (<strong>Invitados, Aliados, Prensa y Medios</strong>) contabilizan únicamente las cortesías <strong>aceptadas y efectivamente entregadas</strong> en taquilla (mostrando <strong>0</strong> si no se entregó ninguna).
+            Incluye el total de <strong>cortesías asignadas</strong> (enviadas), <strong>boletos reservados</strong> (aceptados por el invitado) y el desglose por categoría de boletos <strong>efectivamente entregados</strong> en taquilla.
           </p>
         </div>
 
@@ -103,6 +107,10 @@ export default function ResumenView({ screenings, salas = SALAS_CCU, courtesies 
               <th className="py-3.5 px-4">Función (Película / Evento y Horario)</th>
               <th className="py-3.5 px-4">Sala y Aforo</th>
               <th className="py-3.5 px-4 text-center">
+                Cortesías Asignadas
+                <span className="block text-[10px] text-[#F4F0EA]/50 font-normal">(Total Enviadas)</span>
+              </th>
+              <th className="py-3.5 px-4 text-center">
                 Boletos Reservados
                 <span className="block text-[10px] text-[#D91E26] font-normal">(Total Aceptados)</span>
               </th>
@@ -116,6 +124,9 @@ export default function ResumenView({ screenings, salas = SALAS_CCU, courtesies 
           <tbody className="divide-y divide-[#F4F0EA]/15 text-sm">
             {summaryRows.map((row) => {
               const esEvento = row.screening.tipo === 'evento';
+              const superoLimite =
+                row.limiteCortesias !== null && row.cortesiasAsignadas >= row.limiteCortesias;
+
               return (
                 <tr key={row.screening.id} className="bg-[#111111] hover:bg-[#161616]">
                   <td className="py-4 px-4">
@@ -141,6 +152,23 @@ export default function ResumenView({ screenings, salas = SALAS_CCU, courtesies 
                       {row.sala?.nombre || row.screening.salaId}
                     </div>
                     <div className="text-xs text-[#F4F0EA]/70 print-text-dark">{row.aforoTexto}</div>
+                  </td>
+                  {/* NUEVA COLUMNA: CORTESÍAS ASIGNADAS */}
+                  <td className="py-4 px-4 text-center font-mono">
+                    <span
+                      className={`inline-block px-3 py-1 border font-extrabold print-text-dark ${
+                        superoLimite
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                          : 'bg-[#080808] border-[#F4F0EA]/30 text-[#F4F0EA]'
+                      }`}
+                    >
+                      {row.cortesiasAsignadas}
+                      {row.limiteCortesias ? (
+                        <span className="text-xs font-normal text-[#F4F0EA]/50 print-text-dark">
+                          /{row.limiteCortesias}
+                        </span>
+                      ) : null}
+                    </span>
                   </td>
                   <td className="py-4 px-4 text-center">
                     <span className="inline-block px-3 py-1 bg-[#080808] border border-[#F4F0EA]/30 font-extrabold text-[#F4F0EA] print-text-dark">
@@ -168,6 +196,13 @@ export default function ResumenView({ screenings, salas = SALAS_CCU, courtesies 
                 </tr>
               );
             })}
+            {summaryRows.length === 0 && (
+              <tr>
+                <td colSpan="9" className="py-8 text-center text-xs uppercase tracking-[0.18em] text-[#F4F0EA]/40">
+                  No hay funciones ni cortesías registradas.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

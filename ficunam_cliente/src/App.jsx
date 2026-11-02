@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Lock, CheckCircle2, XCircle, Send, Copy, ExternalLink } from 'lucide-react';
+import { Lock, CheckCircle2, XCircle, Send, Copy, ExternalLink, Trash2, AlertTriangle } from 'lucide-react';
 import { SALAS_CCU, CATEGORIAS_CORTESIA } from './constants/salas';
 import { INITIAL_SCREENINGS, INITIAL_COURTESIES } from './data/mockData';
 import Header from './components/layout/Header';
@@ -24,7 +24,8 @@ import {
   approvePublicRequest,
   rejectPublicRequest,
   acceptCourtesyByToken,
-  toggleCourtesyDelivered
+  toggleCourtesyDelivered,
+  resetAllDatabase
 } from './services/api';
 
 const FICUNAM_CARTELERA_URL = 'https://ficunam.unam.mx/programacion/';
@@ -53,7 +54,7 @@ export default function App() {
   const [selectedMovieTitle, setSelectedMovieTitle] = useState('');
   const [selectedScreeningId, setSelectedScreeningId] = useState('');
 
-  // Estados para el portal público aislado (/solicitar) con selección en 2 pasos
+  // Estados para el portal público aislado (/solicitar)
   const [pubName, setPubName] = useState('');
   const [pubEmail, setPubEmail] = useState('');
   const [pubCompany, setPubCompany] = useState('');
@@ -62,6 +63,26 @@ export default function App() {
   const [pubScreeningId, setPubScreeningId] = useState('');
   const [pubSubmitted, setPubSubmitted] = useState(false);
   const [pubSending, setPubSending] = useState(false);
+
+  // Estados para el Modal Oculto de Reinicio Maestro (Shift + Alt + D)
+  const [showSecretResetModal, setShowSecretResetModal] = useState(false);
+  const [masterPinInput, setMasterPinInput] = useState('');
+  const [resetStatus, setResetStatus] = useState(null);
+  const [resetting, setResetting] = useState(false);
+
+  // Escuchar atajo secreto de teclado: Shift + Alt + D
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.shiftKey && e.altKey && (e.key === 'D' || e.key === 'd' || e.code === 'KeyD')) {
+        e.preventDefault();
+        setShowSecretResetModal((prev) => !prev);
+        setResetStatus(null);
+        setMasterPinInput('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const allSalas = useMemo(() => {
     const map = new Map();
@@ -87,6 +108,11 @@ export default function App() {
         setSelectedScreeningId((prev) => prev || dbScreenings[0].id);
         setPubMovieTitle((prev) => prev || dbScreenings[0].pelicula);
         setPubScreeningId((prev) => prev || dbScreenings[0].id);
+      } else {
+        setSelectedMovieTitle('');
+        setSelectedScreeningId('');
+        setPubMovieTitle('');
+        setPubScreeningId('');
       }
     } catch (err) {
       console.warn('Usando datos de respaldo:', err.message);
@@ -107,6 +133,35 @@ export default function App() {
       loadFromBackend();
     }
   }, [guestToken, loadFromBackend]);
+
+  const handleMasterReset = async (e) => {
+    e.preventDefault();
+    if (!masterPinInput.trim()) return;
+    setResetting(true);
+    setResetStatus(null);
+    try {
+      const res = await resetAllDatabase(masterPinInput.trim());
+      setScreenings([]);
+      setCourtesies([]);
+      setExtraSalas([]);
+      setSelectedMovieTitle('');
+      setSelectedScreeningId('');
+      setPubMovieTitle('');
+      setPubScreeningId('');
+      setResetStatus({
+        type: 'success',
+        message: `${res.message} Se eliminaron ${res.deleted.screenings} funciones, ${res.deleted.courtesies} cortesías/solicitudes y ${res.deleted.venues} salas extra.`
+      });
+      setMasterPinInput('');
+    } catch (err) {
+      setResetStatus({
+        type: 'error',
+        message: err.message
+      });
+    } finally {
+      setResetting(false);
+    }
+  };
 
   // Separar cortesías aprobadas de las solicitudes públicas pendientes
   const approvedCourtesies = useMemo(
@@ -188,7 +243,7 @@ export default function App() {
     return <ConfirmacionInvitadoView token={guestToken} />;
   }
 
-  // 2. Portal Público de Solicitud 100% Aislado (/solicitar) - CON SELECTOR EN 2 PASOS Y LINK A CARTELERA
+  // 2. Portal Público de Solicitud 100% Aislado (/solicitar)
   if (isPublicRequestRoute) {
     const currentPubMovieTitle = pubMovieTitle || movieTitles[0] || '';
     const pubAvailableSchedules =
@@ -397,6 +452,9 @@ export default function App() {
                       onChange={(e) => handleSelectPubMovie(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] focus:outline-none focus:border-[#D91E26]"
                     >
+                      {movieTitles.length === 0 && (
+                        <option value="">No hay funciones programadas por el momento</option>
+                      )}
                       {movieTitles.map((title) => {
                         const group = moviesGrouped[title];
                         const isEv = group.tipo === 'evento';
@@ -827,6 +885,88 @@ export default function App() {
           <ResumenView screenings={screenings} salas={allSalas} courtesies={approvedCourtesies} />
         )}
       </main>
+
+      {/* ========================================================= */}
+      {/* MODAL OCULTO DE DESARROLLADOR (ACTIVADO CON SHIFT+ALT+D) */}
+      {/* ========================================================= */}
+      {showSecretResetModal && (
+        <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-[#111111] border-2 border-[#D91E26] p-6 shadow-[8px_8px_0px_0px_#F4F0EA] space-y-5">
+            <div className="flex items-start justify-between border-b border-[#F4F0EA]/20 pb-3">
+              <div>
+                <span className="text-[10px] tracking-[0.25em] uppercase text-[#D91E26] font-bold block">
+                  CONSOLA DE DESARROLLADOR · ACCESO OCULTO
+                </span>
+                <h3 className="font-ficunam-display text-xl font-extrabold uppercase text-[#F4F0EA] mt-0.5">
+                  Limpieza Total de Base de Datos
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSecretResetModal(false)}
+                className="text-xs text-[#F4F0EA]/60 hover:text-white uppercase font-bold"
+              >
+                ✕ Cerrar
+              </button>
+            </div>
+
+            <div className="p-3.5 bg-[#080808] border border-amber-500/50 text-amber-200 text-xs space-y-1">
+              <div className="font-bold uppercase flex items-center gap-1.5 text-amber-400">
+                <AlertTriangle className="w-4 h-4" /> Acción Irreversible
+              </div>
+              <p className="text-[#F4F0EA]/80 leading-relaxed">
+                Esto eliminará todas las <strong>películas, eventos, horarios, salas extra, solicitudes públicas e invitaciones</strong> de MongoDB para dejar el sistema en blanco.
+              </p>
+            </div>
+
+            <form onSubmit={handleMasterReset} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80 mb-1.5">
+                  PIN Maestro de Creador
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={masterPinInput}
+                  onChange={(e) => setMasterPinInput(e.target.value)}
+                  placeholder="Ingresa tu PIN de desarrollador"
+                  className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] focus:outline-none focus:border-[#D91E26]"
+                />
+              </div>
+
+              {resetStatus && (
+                <div
+                  className={`p-3 border text-xs ${
+                    resetStatus.type === 'error'
+                      ? 'border-rose-500 bg-rose-950/40 text-rose-200'
+                      : 'border-emerald-500 bg-emerald-950/40 text-emerald-200'
+                  }`}
+                >
+                  {resetStatus.message}
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setShowSecretResetModal(false)}
+                  className="flex-1 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-xs font-bold uppercase tracking-[0.15em] text-[#F4F0EA]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetting}
+                  className="flex-1 py-2.5 bg-[#D91E26] hover:bg-[#b8161d] text-white text-xs font-bold uppercase tracking-[0.15em] border border-[#F4F0EA] inline-flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {resetting ? 'Borrando...' : 'Vaciar Todo'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>
