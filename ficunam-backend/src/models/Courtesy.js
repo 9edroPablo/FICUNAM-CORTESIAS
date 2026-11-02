@@ -1,40 +1,50 @@
 import mongoose from 'mongoose';
-import crypto from 'crypto';
 
-const courtesySchema = new mongoose.Schema(
-  {
-    nombre: { type: String, required: true, trim: true },
-    empresa: { type: String, default: '', trim: true },
-    correo: { type: String, required: true, trim: true, lowercase: true },
-    categoria: {
-      type: String,
-      required: true,
-      enum: ['Invitados', 'Aliados', 'Prensa', 'Medios']
-    },
-    screeningId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Screening',
-      required: true
-    },
-    token: {
-      type: String,
-      unique: true,
-      default: () => crypto.randomBytes(24).toString('hex')
-    },
-    estado: {
-      type: String,
-      enum: ['pendiente', 'aceptada'],
-      default: 'pendiente'
-    },
-    entregado: {
-      type: Boolean,
-      default: false
-    },
-    fechaEnvio: { type: Date, default: Date.now },
-    fechaRespuesta: { type: Date, default: null },
-    fechaEntrega: { type: Date, default: null }
+const courtesySchema = new mongoose.Schema({
+  nombre: {
+    type: String,
+    required: true,
+    trim: true
   },
-  { timestamps: true }
-);
+  correo: {
+    type: String,
+    required: true,
+    trim: true,
+    lowercase: true
+  },
+  empresa: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  categoria: {
+    type: String,
+    default: 'Invitado Especial'
+  },
+  screeningId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Screening',
+    required: true
+  },
+  estadoSolicitud: {
+    type: String,
+    enum: ['solicitud_pendiente', 'aprobada'],
+    default: 'aprobada'
+  },
+  estado: {
+    type: String,
+    enum: ['pendiente', 'confirmada', 'declinada', 'cancelada'],
+    default: 'pendiente'
+  },
+  token: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  emailEnviado: {
+    type: Boolean,
+    default: false
+  }
+}, { timestamps: true });
 
 export default mongoose.model('Courtesy', courtesySchema);

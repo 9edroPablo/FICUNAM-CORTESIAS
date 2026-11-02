@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const venueSchema = new mongoose.Schema({
   id: {
@@ -23,4 +23,4 @@ const venueSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Venue', venueSchema);
+export default mongoose.model('Venue', venueSchema);

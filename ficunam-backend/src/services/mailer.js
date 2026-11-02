@@ -1,4 +1,4 @@
-const SALAS_MAP = {
+export const SALAS_MAP = {
   'julio-bracho': 'Sala Julio Bracho (CCU)',
   'jose-revueltas': 'Sala José Revueltas (CCU)',
   'carlos-monsivais': 'Sala Carlos Monsiváis (CCU)',
@@ -8,11 +8,11 @@ const SALAS_MAP = {
   'cinematografo-del-chopo': 'Cinematógrafo del Chopo'
 };
 
-async function sendInvitationEmail(courtesy, screening) {
+export async function sendInvitationEmail(courtesy, screening) {
   const brevoApiKey = process.env.BREVO_API_KEY;
   const senderEmail = process.env.SMTP_USER || 'invitaciones@ficunam-cortesias.lat';
   const senderName = 'Dirección Ejecutiva FICUNAM';
-  const frontendUrl = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+  const frontendUrl = (process.env.FRONTEND_URL || 'https://ficunam-cortesiass.vercel.app').replace(/\/$/, '');
 
   const confirmUrl = `${frontendUrl}/confirmar/${courtesy.token}`;
   const salaNombre = SALAS_MAP[screening.sala] || screening.sala;
@@ -72,7 +72,7 @@ async function sendInvitationEmail(courtesy, screening) {
           </a>
         </div>
         <p style="font-size: 12px; color: #737373; text-align: center; margin-top: 24px;">
-          Si el botón no funciona, copie y pegue este enlace en su navegador:<br/>
+          Si el enlace directo no abre, copie y pegue la siguiente dirección:<br/>
           <a href="${confirmUrl}" style="color: #f59e0b;">${confirmUrl}</a>
         </p>
       </div>
@@ -122,5 +122,3 @@ async function sendInvitationEmail(courtesy, screening) {
   console.log(`📧 Correo enviado vía Brevo HTTPS a ${courtesy.correo}`);
   return true;
 }
-
-module.exports = { sendInvitationEmail, SALAS_MAP };
