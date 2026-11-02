@@ -51,4 +51,4 @@ export const SALAS_CCU = [
 
 export const CATEGORIAS_CORTESIA = ['Invitados', 'Aliados', 'Prensa', 'Medios'];
 
-export const SENDER_EMAIL = 'asistencia.direccionejecutiva@fic.unam.mx';
+export const SENDER_EMAIL = 'invitaciones@ficunam-cortesias.lat';

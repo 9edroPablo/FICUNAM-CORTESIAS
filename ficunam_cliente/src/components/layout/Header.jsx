@@ -1,12 +1,13 @@
 import React from 'react';
-import { Film, Send, Ticket, BarChart3, Mail, Clock, ArrowUpRight } from 'lucide-react';
+import { Film, Send, Ticket, BarChart3, Inbox, Mail, Clock, ArrowUpRight, Lock } from 'lucide-react';
 import FicunamLogo from '../artwork/FicunamLogo';
 import { SENDER_EMAIL } from '../../constants/salas';
 
-export default function Header({ activeTab, setActiveTab }) {
+export default function Header({ activeTab, setActiveTab, pendingRequestsCount = 0, onLogout }) {
   const tabs = [
     { id: 'funciones', label: 'Funciones', icon: Film },
     { id: 'cortesias', label: 'Asignar Cortesías y Correo', icon: Send },
+    { id: 'solicitudes', label: 'Solicitudes', icon: Inbox, badge: pendingRequestsCount },
     { id: 'taquilla', label: 'Entrega de Boletos', icon: Ticket },
     { id: 'resumen', label: 'Resumen Ejecutivo', icon: BarChart3 }
   ];
@@ -26,8 +27,20 @@ export default function Header({ activeTab, setActiveTab }) {
               FESTIVAL INTERNACIONAL DE CINE UNAM
             </span>
           </div>
-          <div className="text-[10px] tracking-[0.25em] text-[#D91E26] font-bold">
-            CENTRO CULTURAL UNIVERSITARIO · UNAM
+          <div className="flex items-center gap-4">
+            <span className="text-[10px] tracking-[0.25em] text-[#D91E26] font-bold">
+              CENTRO CULTURAL UNIVERSITARIO · UNAM
+            </span>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="text-[10px] tracking-[0.18em] uppercase px-2 py-0.5 border border-[#F4F0EA]/25 text-[#F4F0EA]/70 hover:border-[#D91E26] hover:text-white inline-flex items-center gap-1"
+              >
+                <Lock className="w-3 h-3 text-[#D91E26]" />
+                Salir
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -98,6 +111,11 @@ export default function Header({ activeTab, setActiveTab }) {
                 >
                   <Icon className="w-4 h-4 text-[#D91E26]" />
                   <span>{tab.label}</span>
+                  {tab.badge > 0 && (
+                    <span className="px-1.5 py-0.5 text-[10px] bg-[#D91E26] text-white font-mono font-extrabold">
+                      {tab.badge}
+                    </span>
+                  )}
                   <ArrowUpRight className={`w-3.5 h-3.5 ${active ? 'opacity-100 text-[#080808]' : 'opacity-40'}`} />
                 </button>
               );

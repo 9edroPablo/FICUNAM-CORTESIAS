@@ -1,4 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+const RAW_BASE = import.meta.env.VITE_API_URL || 'https://ficunam-cortesias.onrender.com/api';
+const API_BASE = RAW_BASE.endsWith('/api') ? RAW_BASE : `${RAW_BASE.replace(/\/$/, '')}/api`;
 
 const normalizeDoc = (doc) => {
   if (!doc) return doc;
@@ -8,6 +9,34 @@ const normalizeDoc = (doc) => {
   }
   return normalized;
 };
+
+export async function loginAdmin(password) {
+  const res = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password })
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || 'Contraseña incorrecta');
+  return data;
+}
+
+export async function fetchExtraVenues() {
+  const res = await fetch(`${API_BASE}/venues`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export async function createExtraVenue(payload) {
+  const res = await fetch(`${API_BASE}/venues`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error al registrar sala extra');
+  return data;
+}
 
 export async function fetchScreenings() {
   const res = await fetch(`${API_BASE}/screenings`);
@@ -54,6 +83,40 @@ export async function createCourtesy(payload) {
     ...data,
     courtesy: normalizeDoc(data.courtesy)
   };
+}
+
+export async function createPublicRequest(payload) {
+  const res = await fetch(`${API_BASE}/public/solicitar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error al registrar solicitud');
+  return {
+    ...data,
+    courtesy: normalizeDoc(data.courtesy)
+  };
+}
+
+export async function approvePublicRequest(id) {
+  const res = await fetch(`${API_BASE}/courtesies/${id}/aprobar`, {
+    method: 'PATCH'
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error al aprobar solicitud');
+  return {
+    ...data,
+    courtesy: normalizeDoc(data.courtesy)
+  };
+}
+
+export async function rejectPublicRequest(id) {
+  const res = await fetch(`${API_BASE}/courtesies/${id}/denegar`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) throw new Error('Error al denegar solicitud');
+  return res.json();
 }
 
 export async function verifyCourtesyToken(token) {
