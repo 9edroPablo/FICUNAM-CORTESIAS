@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
-const API_URL = (import.meta.env.VITE_API_URL || 'https://ficunam-cortesias.onrender.com').replace(/\/$/, '');
+const API_URL = 'https://ficunam-cortesias.onrender.com';
 
 const CATEGORIAS = [
   'Invitado Especial',
