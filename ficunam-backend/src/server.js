@@ -259,6 +259,44 @@ app.post('/api/courtesies/accept/:token', async (req, res) => {
   }
 });
 
+// ==========================================
+// REINICIO MAESTRO OCULTO (SOLO DESARROLLADOR)
+// ==========================================
+app.delete('/api/dev/reset-all', async (req, res) => {
+  try {
+    const { masterPin } = req.body;
+    const expectedPin = process.env.DEV_RESET_PIN || 'pedro-reset-2026';
+
+    if (masterPin !== expectedPin) {
+      return res.status(403).json({ ok: false, error: 'PIN maestro de desarrollador inválido' });
+    }
+
+    const [delScreenings, delCourtesies, delVenues] = await Promise.all([
+      Screening.deleteMany({}),
+      Courtesy.deleteMany({}),
+      Venue.deleteMany({})
+    ]);
+
+    console.log('🧹 Base de datos reiniciada por el desarrollador:', {
+      funcionesEliminadas: delScreenings.deletedCount,
+      cortesiasEliminadas: delCourtesies.deletedCount,
+      salasExtraEliminadas: delVenues.deletedCount
+    });
+
+    res.json({
+      ok: true,
+      message: 'Base de datos limpia al 100%. Lista para producción.',
+      deleted: {
+        screenings: delScreenings.deletedCount,
+        courtesies: delCourtesies.deletedCount,
+        venues: delVenues.deletedCount
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 4000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/ficunam_cortesias';
 

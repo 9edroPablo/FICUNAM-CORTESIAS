@@ -146,3 +146,14 @@ export async function toggleCourtesyDelivered(id) {
   if (!res.ok) throw new Error(data.error || 'Error al actualizar entrega');
   return normalizeDoc(data);
 }
+
+export async function resetAllDatabase(masterPin) {
+  const res = await fetch(`${API_BASE}/dev/reset-all`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ masterPin })
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || 'No se pudo reiniciar la base de datos');
+  return data;
+}
