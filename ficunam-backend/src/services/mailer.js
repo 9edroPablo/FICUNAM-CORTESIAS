@@ -47,7 +47,7 @@ async function sendInvitationEmail(courtesy, screening, customSalaNombre) {
           Estimado(a) <strong style="color: #ffffff; text-decoration: underline; text-decoration-color: #D91E26;">${courtesy.nombre}</strong>${courtesy.empresa ? ` (${courtesy.empresa})` : ''}:
         </p>
         <p style="font-size: 14px; line-height: 1.6; color: #E5E0D8;">
-          La Dirección Ejecutiva del <strong>Festival Internacional de Cine UNAM (FICUNAM)</strong> le extiende una cordial invitación para asistir ${etiquetaTexto} de nuestra programación oficial en el Centro Cultural Universitario:
+          La Dirección Ejecutiva del <strong>Festival Internacional de Cine UNAM (FICUNAM)</strong> le extiende una cordial invitación para asistir ${etiquetaTexto} de nuestra programación oficial:
         </p>
         <div style="background-color: #121212; border-left: 4px solid #D91E26; padding: 20px; margin: 24px 0;">
           <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: #D91E26; font-weight: bold;">
