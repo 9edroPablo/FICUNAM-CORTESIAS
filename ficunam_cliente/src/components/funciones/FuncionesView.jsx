@@ -1,8 +1,109 @@
-import React, { useState } from 'react';
-import { Plus, CheckCircle2, MapPin, Calendar, Clock, Trash2, AlertTriangle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Plus, CheckCircle2, MapPin, Calendar, Clock, Trash2, AlertTriangle, FileSpreadsheet, Upload } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { SALAS_CCU } from '../../constants/salas';
 import { formatDateSpanish } from '../../utils/dateUtils';
 import FicunamLogo from '../artwork/FicunamLogo';
+
+// Mapea abreviaturas ("J. BRACHO", "M. COVARRUBIAS", etc.) o nombres a las salas registradas
+function matchSalaId(rawSalaText, salasList) {
+  const clean = String(rawSalaText || '')
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  if (!clean) return 'covarrubias';
+
+  if (clean.includes('BRACHO')) return 'bracho';
+  if (clean.includes('REVUELTAS')) return 'revueltas';
+  if (clean.includes('COVARRUBIAS')) return 'covarrubias';
+  if (clean.includes('MONSIVAIS')) return 'monsivais';
+  if (clean.includes('CHAVEZ')) return 'chavez';
+  if (clean.includes('ESPIGA') || clean.includes('MUAC')) return 'espiga';
+
+  const found = salasList.find((s) => {
+    const sName = s.nombre.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return s.id.toUpperCase() === clean || sName.includes(clean) || clean.includes(sName);
+  });
+
+  return found ? found.id : 'covarrubias';
+}
+
+// Extrae Título en Español y Director del bloque multilínea original de FICUNAM
+function parseRawTitleAndDirector(rawCellText, esEvento) {
+  let lines = String(rawCellText || '')
+    .replace(/\u00a0/g, ' ')
+    .split(/\r?\n/)
+    .map((l) => l.trim().replace(/^"+|"+$/g, '').trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) return { pelicula: '', director: '' };
+
+  if (lines[0].startsWith('–') && lines[0].endsWith('–') && lines.length > 1) {
+    lines = lines.slice(1);
+  }
+
+  let titleLine = lines[0];
+  let dirLine = lines[1] || '';
+
+  if (lines[0].toLowerCase() === 'cinema kabuki' && lines.length >= 3) {
+    titleLine = `${lines[0]}: ${lines[1]}`;
+    dirLine = lines[2];
+  }
+
+  let spanishTitle = titleLine.split('|')[0].trim();
+  spanishTitle = spanishTitle
+    .replace(/\s*\([^\)]*[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf]+[^\)]*\)\s*$/g, '')
+    .replace(/^"+|"+$/g, '')
+    .trim();
+
+  let director = '';
+  if (!esEvento && dirLine) {
+    director = dirLine.split('|')[0].replace(/^"+|"+$/g, '').trim();
+    if (spanishTitle.toUpperCase().includes('PELECHIAN') && (director.includes('Nosotros') || director.includes('Patrulla'))) {
+      director = `Artavazd Pelechian (${director})`;
+    }
+  }
+
+  return { pelicula: spanishTitle, director };
+}
+
+function normalizeExcelDate(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return val.toISOString().slice(0, 10);
+  }
+  if (typeof val === 'number') {
+    const d = XLSX.SSF.parse_date_code(val);
+    if (d) {
+      return `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+    }
+  }
+  const str = String(val).trim();
+  const matchIso = str.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (matchIso) return matchIso[1];
+  return str.slice(0, 10);
+}
+
+function normalizeExcelTime(val) {
+  if (val === null || val === undefined || val === '') return '18:00';
+  if (val instanceof Date) {
+    return `${String(val.getHours()).padStart(2, '0')}:${String(val.getMinutes()).padStart(2, '0')}`;
+  }
+  if (typeof val === 'number') {
+    const totalSeconds = Math.round(val * 86400);
+    const hours = Math.floor(totalSeconds / 3600) % 24;
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  }
+  const str = String(val).trim();
+  const matchTime = str.match(/(\d{1,2}):(\d{2})/);
+  if (matchTime) {
+    return `${ matchTime[1].padStart(2, '0') }:${ matchTime[2] }`;
+  }
+  return '18:00';
+}
 
 export default function FuncionesView({
   screenings,
@@ -10,11 +111,12 @@ export default function FuncionesView({
   moviesGrouped,
   occupancyByScreening,
   onAddScreening,
+  onBulkAddScreenings,
   onAddExtraVenue,
   onDeleteScreening,
   onGoToCourtesyForMovie
 }) {
-  const [newTipo, setNewTipo] = useState('pelicula'); // 'pelicula' | 'evento'
+  const [newTipo, setNewTipo] = useState('pelicula');
   const [newPelicula, setNewPelicula] = useState('');
   const [newDirector, setNewDirector] = useState('');
   const [newSalaId, setNewSalaId] = useState('covarrubias');
@@ -22,8 +124,9 @@ export default function FuncionesView({
   const [newHora, setNewHora] = useState('18:00');
   const [newLimiteCortesias, setNewLimiteCortesias] = useState('50');
   const [funcionFeedback, setFuncionFeedback] = useState(null);
+  const [importingExcel, setImportingExcel] = useState(false);
+  const fileInputRef = useRef(null);
 
-  // Estado para agregar Sala Extra inline (Punto 4)
   const [showAddSala, setShowAddSala] = useState(false);
   const [extraSalaNombre, setExtraSalaNombre] = useState('');
   const [extraSalaAforo, setExtraSalaAforo] = useState('100');
@@ -52,6 +155,119 @@ export default function FuncionesView({
     });
 
     setTimeout(() => setFuncionFeedback(null), 5000);
+  };
+
+  // Procesa tanto la Plantilla Limpia como el archivo crudo "Copia de FIC16_Cortesías.xlsx"
+  const handleExcelUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportingExcel(true);
+    setFuncionFeedback(null);
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rawRows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: '' });
+
+      // Buscar en qué fila están los encabezados ("TÍTULO DE LA PELÍCULA" o "Título en Español")
+      let headerRowIndex = 0;
+      for (let i = 0; i < Math.min(rawRows.length, 10); i++) {
+        const rowStr = rawRows[i].map((c) => String(c).toUpperCase()).join(' ');
+        if (rowStr.includes('TITULO') || rowStr.includes('TÍTULO') || rowStr.includes('PELICULA') || rowStr.includes('PELÍCULA')) {
+          headerRowIndex = i;
+          break;
+        }
+      }
+
+      const headers = rawRows[headerRowIndex].map((h) => String(h || '').trim().toUpperCase());
+      const findCol = (...keywords) =>
+        headers.findIndex((h) => keywords.some((k) => h.includes(k)));
+
+      const colTitulo = findCol('TITULO EN ESPAÑOL', 'TÍTULO EN ESPAÑOL', 'TÍTULO DE LA PELÍCULA', 'TITULO');
+      const colDirector = findCol('DIRECTOR');
+      const colFecha = findCol('FECHA');
+      const colHora = findCol('HORA');
+      const colSala = findCol('SALA');
+      const colPlataforma = findCol('PLATAFORMA', 'LÍMITE', 'LIMITE');
+      const colEvento = findCol('EVENTO');
+
+      const parsedItems = [];
+
+      for (let r = headerRowIndex + 1; r < rawRows.length; r++) {
+        const row = rawRows[r];
+        if (!row || row.length === 0) continue;
+
+        const rawTitleCell = colTitulo >= 0 ? row[colTitulo] : '';
+        if (!rawTitleCell || String(rawTitleCell).toUpperCase().includes('TOTAL FUNCIONES')) continue;
+
+        // Regla: Límite de cortesías es la columna Plataforma. Si es <= 0 o vacío, NO se agrega.
+        const rawPlat = colPlataforma >= 0 ? row[colPlataforma] : null;
+        const limiteNum = Number(rawPlat);
+        if (rawPlat === '' || rawPlat === null || Number.isNaN(limiteNum) || limiteNum <= 0) {
+          continue;
+        }
+
+        // Regla: Si en la columna Evento dice "S", es un evento (sin director); si no, es película.
+        const rawEvento = colEvento >= 0 ? String(row[colEvento] || '').trim().toUpperCase() : '';
+        const esEvento = rawEvento === 'S' || rawEvento === 'EVENTO' || rawEvento === 'SI' || rawEvento === 'SÍ';
+
+        let pelicula = '';
+        let director = '';
+
+        if (colDirector >= 0 && String(row[colDirector] || '').trim() !== '') {
+          // Viene de la plantilla con columnas separadas
+          pelicula = String(rawTitleCell).split('|')[0].trim();
+          director = esEvento ? '' : String(row[colDirector]).split('|')[0].trim();
+        } else {
+          // Viene del Excel original de FICUNAM con título + director en la misma celda
+          const extracted = parseRawTitleAndDirector(rawTitleCell, esEvento);
+          pelicula = extracted.pelicula;
+          director = extracted.director;
+        }
+
+        if (!pelicula) continue;
+
+        const salaRaw = colSala >= 0 ? row[colSala] : '';
+        const salaId = matchSalaId(salaRaw, salas);
+        const fecha = normalizeExcelDate(colFecha >= 0 ? row[colFecha] : '');
+        const hora = normalizeExcelTime(colHora >= 0 ? row[colHora] : '');
+
+        if (!fecha) continue;
+
+        parsedItems.push({
+          tipo: esEvento ? 'evento' : 'pelicula',
+          pelicula,
+          director: esEvento ? '' : director,
+          salaId,
+          fecha,
+          hora,
+          limiteCortesias: Math.round(limiteNum)
+        });
+      }
+
+      if (parsedItems.length === 0) {
+        throw new Error('No se encontraron funciones con cupo en Plataforma mayor a 0 en el archivo.');
+      }
+
+      if (onBulkAddScreenings) {
+        await onBulkAddScreenings(parsedItems);
+      } else {
+        for (const item of parsedItems) {
+          await onAddScreening(item);
+        }
+      }
+
+      setFuncionFeedback({
+        message: `¡Importación exitosa! Se cargaron ${parsedItems.length} funciones y eventos (con Plataforma > 0) desde el archivo Excel.`
+      });
+    } catch (err) {
+      alert(`Error al importar Excel: ${err.message}`);
+    } finally {
+      setImportingExcel(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleCreateExtraSala = async () => {
@@ -91,12 +307,36 @@ export default function FuncionesView({
           <FicunamLogo variant="stamp" className="w-20 h-10 shrink-0" />
         </div>
 
-        <p className="text-xs text-[#F4F0EA]/70 mb-5 leading-relaxed">
-          Si registras el mismo título de película o evento con otra fecha u hora, el sistema agrupa automáticamente sus horarios de la semana.
-        </p>
+        {/* CARGA MASIVA DESDE EXCEL (Punto 3) */}
+        <div className="mb-6 p-4 bg-[#080808] border border-[#D91E26]/60 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#D91E26] flex items-center gap-1.5">
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              Carga Masiva desde Excel (.xlsx)
+            </span>
+          </div>
+          <p className="text-[11px] text-[#F4F0EA]/70 leading-relaxed">
+            Sube la plantilla o el archivo de programación. Extrae títulos en español, directores, salas abreviadas, eventos (<strong>S</strong>) y filtra automáticamente donde <strong>Plataforma &gt; 0</strong>.
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleExcelUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            disabled={importingExcel}
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full py-2.5 px-3 bg-[#F4F0EA] hover:bg-white text-[#080808] font-bold uppercase tracking-[0.16em] text-xs transition flex items-center justify-center gap-2 border border-[#F4F0EA] shadow-[3px_3px_0px_0px_#D91E26]"
+          >
+            <Upload className="w-4 h-4 text-[#D91E26]" />
+            {importingExcel ? 'Procesando archivo Excel...' : 'Subir Archivo Excel de Funciones →'}
+          </button>
+        </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Selector Película vs Evento (Punto 3) */}
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80 mb-1.5">
               Tipo de Registro
@@ -139,7 +379,7 @@ export default function FuncionesView({
               required
               value={newPelicula}
               onChange={(e) => setNewPelicula(e.target.value)}
-              placeholder={newTipo === 'evento' ? 'Ej. Inauguración FICUNAM / Conversatorio' : 'Ej. El samurái y el prisionero'}
+              placeholder={newTipo === 'evento' ? 'Ej. Competencia Umbrales • 1' : 'Ej. El mal no existe'}
               className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] placeholder-[#F4F0EA]/35 focus:outline-none focus:border-[#D91E26]"
             />
           </div>
@@ -154,13 +394,12 @@ export default function FuncionesView({
                 required
                 value={newDirector}
                 onChange={(e) => setNewDirector(e.target.value)}
-                placeholder="Ej. Kiyoshi Kurosawa"
+                placeholder="Ej. Ryūsuke Hamaguchi"
                 className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] placeholder-[#F4F0EA]/35 focus:outline-none focus:border-[#D91E26]"
               />
             </div>
           )}
 
-          {/* Selector de Sala + Botón Sala Extra (Punto 4) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80">
@@ -244,7 +483,6 @@ export default function FuncionesView({
                 className="w-full px-3 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] focus:outline-none focus:border-[#D91E26]"
               />
             </div>
-            {/* Límite de Cortesías Configurable (Punto 2) */}
             <div>
               <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80 mb-1.5">
                 Límite Cortesías
@@ -254,7 +492,7 @@ export default function FuncionesView({
                 min="1"
                 value={newLimiteCortesias}
                 onChange={(e) => setNewLimiteCortesias(e.target.value)}
-                placeholder="Ej. 50"
+                placeholder="Ej. 25"
                 className="w-full px-3 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] focus:outline-none focus:border-[#D91E26]"
               />
             </div>

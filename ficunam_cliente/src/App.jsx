@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Lock, CheckCircle2, XCircle, Send, Copy, ExternalLink, Trash2, AlertTriangle } from 'lucide-react';
+import { Lock, CheckCircle2, XCircle, Send, Copy, ExternalLink, Trash2, AlertTriangle, Search } from 'lucide-react';
 import { SALAS_CCU, CATEGORIAS_CORTESIA } from './constants/salas';
 import { INITIAL_SCREENINGS, INITIAL_COURTESIES } from './data/mockData';
 import Header from './components/layout/Header';
@@ -17,6 +17,7 @@ import {
   createExtraVenue,
   fetchScreenings,
   createScreening,
+  bulkCreateScreenings,
   removeScreening,
   fetchCourtesies,
   createCourtesy,
@@ -28,7 +29,8 @@ import {
   resetAllDatabase
 } from './services/api';
 
-const FICUNAM_CARTELERA_URL = 'https://ficunam.unam.mx/programacion/';
+// Punto 1: Nuevo link oficial al catálogo de películas de FICUNAM
+const FICUNAM_CARTELERA_URL = 'https://ficunam.unam.mx/catalogo-de-peliculas-2/';
 
 export default function App() {
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
@@ -36,7 +38,6 @@ export default function App() {
   const guestToken = confirmMatch ? confirmMatch[1] : null;
   const isPublicRequestRoute = pathname.startsWith('/solicitar');
 
-  // Autenticación Admin (Punto 6)
   const [adminAuthenticated, setAdminAuthenticated] = useState(
     () => localStorage.getItem('ficunam_admin_session') === 'true'
   );
@@ -54,23 +55,23 @@ export default function App() {
   const [selectedMovieTitle, setSelectedMovieTitle] = useState('');
   const [selectedScreeningId, setSelectedScreeningId] = useState('');
 
-  // Estados para el portal público aislado (/solicitar)
+  // Estados para el portal público aislado (/solicitar) + Buscador de películas (Punto 2)
   const [pubName, setPubName] = useState('');
   const [pubEmail, setPubEmail] = useState('');
   const [pubCompany, setPubCompany] = useState('');
   const [pubCategory, setPubCategory] = useState('Invitados');
+  const [pubSearchQuery, setPubSearchQuery] = useState('');
   const [pubMovieTitle, setPubMovieTitle] = useState('');
   const [pubScreeningId, setPubScreeningId] = useState('');
   const [pubSubmitted, setPubSubmitted] = useState(false);
   const [pubSending, setPubSending] = useState(false);
 
-  // Estados para el Modal Oculto de Reinicio Maestro (Shift + Alt + D)
+  // Modal Oculto de Reinicio Maestro (Shift + Alt + D)
   const [showSecretResetModal, setShowSecretResetModal] = useState(false);
   const [masterPinInput, setMasterPinInput] = useState('');
   const [resetStatus, setResetStatus] = useState(null);
   const [resetting, setResetting] = useState(false);
 
-  // Escuchar atajo secreto de teclado: Shift + Alt + D
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.shiftKey && e.altKey && (e.key === 'D' || e.key === 'd' || e.code === 'KeyD')) {
@@ -163,7 +164,6 @@ export default function App() {
     }
   };
 
-  // Separar cortesías aprobadas de las solicitudes públicas pendientes
   const approvedCourtesies = useMemo(
     () => courtesies.filter((c) => c.estadoSolicitud !== 'solicitud_pendiente'),
     [courtesies]
@@ -183,7 +183,6 @@ export default function App() {
           tipo: s.tipo || 'pelicula',
           pelicula: s.pelicula,
           director: s.director,
-          seccion: s.seccion || 'SELECCIÓN OFICIAL',
           horarios: []
         };
       }
@@ -204,6 +203,22 @@ export default function App() {
   }, [screenings, allSalas]);
 
   const movieTitles = useMemo(() => Object.keys(moviesGrouped), [moviesGrouped]);
+
+  // Punto 2: Filtrado en vivo de películas/eventos en el portal público (/solicitar)
+  const filteredPublicMovieTitles = useMemo(() => {
+    const q = pubSearchQuery
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    if (!q) return movieTitles;
+    return movieTitles.filter((title) => {
+      const group = moviesGrouped[title];
+      const titleNorm = group.pelicula.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const dirNorm = (group.director || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return titleNorm.includes(q) || dirNorm.includes(q);
+    });
+  }, [movieTitles, moviesGrouped, pubSearchQuery]);
 
   const occupancyByScreening = useMemo(() => {
     const counts = {};
@@ -238,17 +253,19 @@ export default function App() {
     return counts;
   }, [screenings, approvedCourtesies, allSalas]);
 
-  // 1. Vista de Confirmación del Invitado (/confirmar/:token)
   if (guestToken) {
     return <ConfirmacionInvitadoView token={guestToken} />;
   }
 
-  // 2. Portal Público de Solicitud 100% Aislado (/solicitar)
+  // 2. Portal Público de Solicitud (/solicitar) con Buscador y Nuevo Link a Catálogo
   if (isPublicRequestRoute) {
-    const currentPubMovieTitle = pubMovieTitle || movieTitles[0] || '';
+    const effectivePubMovieTitle = filteredPublicMovieTitles.includes(pubMovieTitle)
+      ? pubMovieTitle
+      : filteredPublicMovieTitles[0] || '';
+
     const pubAvailableSchedules =
-      currentPubMovieTitle && moviesGrouped[currentPubMovieTitle]
-        ? moviesGrouped[currentPubMovieTitle].horarios
+      effectivePubMovieTitle && moviesGrouped[effectivePubMovieTitle]
+        ? moviesGrouped[effectivePubMovieTitle].horarios
         : [];
 
     const currentPubScreening =
@@ -307,7 +324,7 @@ export default function App() {
                   rel="noreferrer"
                   className="text-[10px] tracking-[0.2em] text-[#F4F0EA] hover:text-[#D91E26] font-bold inline-flex items-center gap-1 transition"
                 >
-                  <span>VER CARTELERA OFICIAL</span>
+                  <span>VER CATÁLOGO DE PELÍCULAS</span>
                   <ExternalLink className="w-3 h-3 text-[#D91E26]" />
                 </a>
                 <span className="text-[10px] tracking-[0.25em] text-[#D91E26] font-bold hidden sm:inline">
@@ -334,7 +351,7 @@ export default function App() {
                       rel="noreferrer"
                       className="inline-flex items-center gap-2 px-3 py-1.5 bg-[#080808] border border-[#F4F0EA]/30 hover:border-[#D91E26] text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA] transition"
                     >
-                      <span>Consultar Cartelera FICUNAM</span>
+                      <span>Consultar Catálogo de Películas FICUNAM</span>
                       <ExternalLink className="w-3.5 h-3.5 text-[#D91E26]" />
                     </a>
                   </div>
@@ -430,11 +447,11 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* PASO 1: Seleccionar Película o Evento */}
-                  <div className="pt-2 border-t border-[#F4F0EA]/15">
-                    <div className="flex items-center justify-between mb-1.5">
+                  {/* BUSCADOR Y PASO 1: Seleccionar Película o Evento */}
+                  <div className="pt-3 border-t border-[#F4F0EA]/15 space-y-2.5">
+                    <div className="flex items-center justify-between">
                       <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80">
-                        1. Seleccionar Película / Función *
+                        1. Buscar y Seleccionar Película o Evento *
                       </label>
                       <a
                         href={FICUNAM_CARTELERA_URL}
@@ -446,16 +463,49 @@ export default function App() {
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     </div>
+
+                    {/* Buscador en tiempo real (Punto 2) */}
+                    <div className="relative">
+                      <Search className="w-4 h-4 text-[#F4F0EA]/40 absolute left-3.5 top-3" />
+                      <input
+                        type="text"
+                        value={pubSearchQuery}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPubSearchQuery(val);
+                          const q = val.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                          const firstMatch = movieTitles.find((t) => {
+                            const g = moviesGrouped[t];
+                            const tNorm = g.pelicula.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const dNorm = (g.director || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            return tNorm.includes(q) || dNorm.includes(q);
+                          });
+                          if (firstMatch) handleSelectPubMovie(firstMatch);
+                        }}
+                        placeholder="Buscar por título de película, evento o director(a)..."
+                        className="w-full pl-10 pr-8 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] placeholder-[#F4F0EA]/35 focus:outline-none focus:border-[#D91E26]"
+                      />
+                      {pubSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setPubSearchQuery('')}
+                          className="absolute right-3 top-2.5 text-xs text-[#F4F0EA]/50 hover:text-white"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
                     <select
                       required
-                      value={currentPubMovieTitle}
+                      value={effectivePubMovieTitle}
                       onChange={(e) => handleSelectPubMovie(e.target.value)}
                       className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] focus:outline-none focus:border-[#D91E26]"
                     >
-                      {movieTitles.length === 0 && (
-                        <option value="">No hay funciones programadas por el momento</option>
+                      {filteredPublicMovieTitles.length === 0 && (
+                        <option value="">No se encontraron coincidencias para "{pubSearchQuery}"</option>
                       )}
-                      {movieTitles.map((title) => {
+                      {filteredPublicMovieTitles.map((title) => {
                         const group = moviesGrouped[title];
                         const isEv = group.tipo === 'evento';
                         return (
@@ -537,7 +587,7 @@ export default function App() {
     );
   }
 
-  // 3. Pantalla de Contraseña de Administración con estética FICUNAM (Punto 6)
+  // 3. Pantalla de Contraseña de Administración
   if (!adminAuthenticated) {
     const handleAdminLogin = async (e) => {
       e.preventDefault();
@@ -631,6 +681,23 @@ export default function App() {
       setScreenings((prev) => [...prev, newItem]);
       setSelectedMovieTitle(newItem.pelicula);
       setSelectedScreeningId(newItem.id);
+    }
+  };
+
+  const handleBulkAddScreenings = async (itemsArray) => {
+    if (backendConnected) {
+      const createdList = await bulkCreateScreenings(itemsArray);
+      setScreenings((prev) => [...prev, ...createdList]);
+      if (createdList.length > 0) {
+        setSelectedMovieTitle(createdList[0].pelicula);
+        setSelectedScreeningId(createdList[0].id);
+      }
+    } else {
+      const localItems = itemsArray.map((item, idx) => ({
+        id: `func-${Date.now()}-${idx}`,
+        ...item
+      }));
+      setScreenings((prev) => [...prev, ...localItems]);
     }
   };
 
@@ -758,6 +825,7 @@ export default function App() {
             moviesGrouped={moviesGrouped}
             occupancyByScreening={occupancyByScreening}
             onAddScreening={handleAddScreening}
+            onBulkAddScreenings={handleBulkAddScreenings}
             onAddExtraVenue={handleAddExtraVenue}
             onDeleteScreening={handleDeleteScreening}
             onGoToCourtesyForMovie={(movieTitle) => {
@@ -886,9 +954,6 @@ export default function App() {
         )}
       </main>
 
-      {/* ========================================================= */}
-      {/* MODAL OCULTO DE DESARROLLADOR (ACTIVADO CON SHIFT+ALT+D) */}
-      {/* ========================================================= */}
       {showSecretResetModal && (
         <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
           <div className="max-w-md w-full bg-[#111111] border-2 border-[#D91E26] p-6 shadow-[8px_8px_0px_0px_#F4F0EA] space-y-5">

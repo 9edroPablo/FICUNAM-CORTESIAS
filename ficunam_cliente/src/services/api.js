@@ -56,6 +56,17 @@ export async function createScreening(payload) {
   return normalizeDoc(data);
 }
 
+export async function bulkCreateScreenings(items) {
+  const res = await fetch(`${API_BASE}/screenings/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Error al importar funciones desde Excel');
+  return data.map(normalizeDoc);
+}
+
 export async function removeScreening(id) {
   const res = await fetch(`${API_BASE}/screenings/${id}`, {
     method: 'DELETE'

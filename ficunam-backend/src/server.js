@@ -90,6 +90,35 @@ app.post('/api/screenings', async (req, res) => {
   }
 });
 
+// Importación masiva de funciones desde Excel
+app.post('/api/screenings/bulk', async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No se enviaron funciones válidas para importar' });
+    }
+
+    const docsToInsert = items.map((item) => {
+      const esEvento = item.tipo === 'evento';
+      return {
+        tipo: esEvento ? 'evento' : 'pelicula',
+        pelicula: (item.pelicula || '').trim(),
+        director: esEvento ? '' : (item.director || '').trim(),
+        seccion: esEvento ? 'EVENTO ESPECIAL' : 'SELECCIÓN OFICIAL',
+        salaId: item.salaId || 'covarrubias',
+        fecha: item.fecha,
+        hora: item.hora,
+        limiteCortesias: Number(item.limiteCortesias) || 50
+      };
+    });
+
+    const created = await Screening.insertMany(docsToInsert);
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/api/screenings/:id', async (req, res) => {
   try {
     await Screening.findByIdAndDelete(req.params.id);
