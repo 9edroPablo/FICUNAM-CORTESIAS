@@ -17,7 +17,6 @@ export default function FuncionesView({
   const [newTipo, setNewTipo] = useState('pelicula'); // 'pelicula' | 'evento'
   const [newPelicula, setNewPelicula] = useState('');
   const [newDirector, setNewDirector] = useState('');
-  const [newSeccion, setNewSeccion] = useState('SELECCIÓN OFICIAL');
   const [newSalaId, setNewSalaId] = useState('covarrubias');
   const [newFecha, setNewFecha] = useState('2026-11-09');
   const [newHora, setNewHora] = useState('18:00');
@@ -39,7 +38,6 @@ export default function FuncionesView({
       tipo: newTipo,
       pelicula: newPelicula.trim(),
       director: newTipo === 'evento' ? '' : newDirector.trim(),
-      seccion: newTipo === 'evento' ? 'EVENTO ESPECIAL' : newSeccion,
       salaId: newSalaId,
       fecha: newFecha,
       hora: newHora,
@@ -76,7 +74,6 @@ export default function FuncionesView({
     setNewTipo(group.tipo || 'pelicula');
     setNewPelicula(group.pelicula);
     setNewDirector(group.director || '');
-    if (group.seccion) setNewSeccion(group.seccion);
   };
 
   return (
@@ -147,42 +144,21 @@ export default function FuncionesView({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {newTipo === 'pelicula' && (
-              <div>
-                <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80 mb-1.5">
-                  Director(a)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={newDirector}
-                  onChange={(e) => setNewDirector(e.target.value)}
-                  placeholder="Ej. Kiyoshi Kurosawa"
-                  className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] placeholder-[#F4F0EA]/35 focus:outline-none focus:border-[#D91E26]"
-                />
-              </div>
-            )}
-
-            <div className={newTipo === 'evento' ? 'sm:col-span-2' : ''}>
+          {newTipo === 'pelicula' && (
+            <div>
               <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80 mb-1.5">
-                Sección FICUNAM
+                Director(a)
               </label>
-              <select
-                value={newSeccion}
-                onChange={(e) => setNewSeccion(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] focus:outline-none focus:border-[#D91E26]"
-              >
-                <option value="SELECCIÓN OFICIAL">SELECCIÓN OFICIAL</option>
-                <option value="AHORA MÉXICO">AHORA MÉXICO</option>
-                <option value="PREMIERES FICUNAM">PREMIERES FICUNAM</option>
-                <option value="TRIBUTO · MEDALLA FILMOTECA UNAM">TRIBUTO</option>
-                <option value="COMPETENCIA UMBRALES">UMBRALES</option>
-                <option value="ACIERTOS">ACIERTOS</option>
-                <option value="EVENTO ESPECIAL">EVENTO ESPECIAL</option>
-              </select>
+              <input
+                type="text"
+                required
+                value={newDirector}
+                onChange={(e) => setNewDirector(e.target.value)}
+                placeholder="Ej. Kiyoshi Kurosawa"
+                className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] placeholder-[#F4F0EA]/35 focus:outline-none focus:border-[#D91E26]"
+              />
             </div>
-          </div>
+          )}
 
           {/* Selector de Sala + Botón Sala Extra (Punto 4) */}
           <div>
@@ -328,10 +304,7 @@ export default function FuncionesView({
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[10px] font-bold tracking-[0.22em] uppercase px-2 py-0.5 bg-[#D91E26] text-white">
-                        0{idx + 1} · {group.seccion || 'SELECCIÓN OFICIAL'}
-                      </span>
-                      <span className="px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em] border border-[#F4F0EA]/40 text-[#F4F0EA]">
-                        {esEvento ? 'EVENTO' : 'PELÍCULA'}
+                        0{idx + 1} · {esEvento ? 'EVENTO ESPECIAL' : 'PELÍCULA'}
                       </span>
                       {group.horarios.length > 1 ? (
                         <span className="px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em] bg-[#F4F0EA] text-[#080808]">
