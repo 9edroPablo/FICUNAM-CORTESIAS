@@ -464,7 +464,7 @@ export default function App() {
                       </a>
                     </div>
 
-                    {/* Buscador en tiempo real (Punto 2) */}
+                    {/* Buscador en tiempo real */}
                     <div className="relative">
                       <Search className="w-4 h-4 text-[#F4F0EA]/40 absolute left-3.5 top-3" />
                       <input
@@ -892,6 +892,12 @@ export default function App() {
                 {pendingRequests.map((req) => {
                   const s = screenings.find((item) => item.id === req.screeningId);
                   const sala = allSalas.find((sa) => sa.id === s?.salaId);
+                  // PUNTO 3: Obtener cupo actual y límite de la función solicitada
+                  const occ = s ? occupancyByScreening[s.id] : null;
+                  const usadas = occ ? occ.totalEnviadas : 0;
+                  const limite = s?.limiteCortesias || occ?.aforoMax || '-';
+                  const lleno = occ?.limiteAlcanzado || occ?.cupoLleno;
+
                   return (
                     <div
                       key={req.id}
@@ -909,8 +915,19 @@ export default function App() {
                           Institución / Medio: <strong className="text-[#F4F0EA]">{req.empresa || 'Público General'}</strong>
                         </div>
                         {s && (
-                          <div className="text-xs text-[#D91E26] font-bold uppercase tracking-wider pt-0.5">
-                            [{s.tipo === 'evento' ? 'EVENTO' : 'PELÍCULA'}] {s.pelicula} · {sala?.nombre || s.salaId} · {formatDateSpanish(s.fecha)} ({s.hora} hrs)
+                          <div className="text-xs text-[#D91E26] font-bold uppercase tracking-wider pt-0.5 flex flex-wrap items-center gap-2">
+                            <span>
+                              [{s.tipo === 'evento' ? 'EVENTO' : 'PELÍCULA'}] {s.pelicula} · {sala?.nombre || s.salaId} · {formatDateSpanish(s.fecha)} ({s.hora} hrs)
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 font-mono text-[11px] border ${
+                                lleno
+                                  ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                                  : 'bg-[#111111] border-[#F4F0EA]/30 text-[#F4F0EA]'
+                              }`}
+                            >
+                              ({usadas}/{limite})
+                            </span>
                           </div>
                         )}
                       </div>

@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Plus, CheckCircle2, MapPin, Calendar, Clock, Trash2, AlertTriangle, FileSpreadsheet, Upload } from 'lucide-react';
+import React, { useState, useRef, useMemo } from 'react';
+import { Plus, CheckCircle2, MapPin, Calendar, Clock, Trash2, AlertTriangle, FileSpreadsheet, Upload, Search } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { SALAS_CCU } from '../../constants/salas';
 import { formatDateSpanish } from '../../utils/dateUtils';
@@ -130,6 +130,27 @@ export default function FuncionesView({
   const [showAddSala, setShowAddSala] = useState(false);
   const [extraSalaNombre, setExtraSalaNombre] = useState('');
   const [extraSalaAforo, setExtraSalaAforo] = useState('100');
+
+  // Buscador de Funciones y Horarios de la Semana (Punto 1)
+  const [searchFuncion, setSearchFuncion] = useState('');
+
+  const filteredGroups = useMemo(() => {
+    const allGroups = Object.values(moviesGrouped);
+    const q = searchFuncion
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    if (!q) return allGroups;
+    return allGroups.filter((group) => {
+      const titleNorm = (group.pelicula || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const dirNorm = (group.director || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const salaMatch = group.horarios?.some((h) =>
+        (h.salaNombre || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q)
+      );
+      return titleNorm.includes(q) || dirNorm.includes(q) || salaMatch;
+    });
+  }, [moviesGrouped, searchFuncion]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -307,7 +328,7 @@ export default function FuncionesView({
           <FicunamLogo variant="stamp" className="w-20 h-10 shrink-0" />
         </div>
 
-        {/* CARGA MASIVA DESDE EXCEL (Punto 3) */}
+        {/* CARGA MASIVA DESDE EXCEL */}
         <div className="mb-6 p-4 bg-[#080808] border border-[#D91E26]/60 space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#D91E26] flex items-center gap-1.5">
@@ -516,7 +537,7 @@ export default function FuncionesView({
       </div>
 
       <div className="lg:col-span-7 bg-[#111111] border-2 border-[#F4F0EA]/25 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-6 border-b border-[#F4F0EA]/15">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-4 mb-4 border-b border-[#F4F0EA]/15">
           <div>
             <span className="text-[10px] tracking-[0.25em] uppercase text-[#D91E26] font-bold block">
               CARTELERA ACTIVA · FICUNAM
@@ -530,8 +551,29 @@ export default function FuncionesView({
           </span>
         </div>
 
+        {/* PUNTO 1: BUSCADOR EN FUNCIONES Y HORARIOS DE LA SEMANA */}
+        <div className="mb-5 relative">
+          <Search className="w-4 h-4 text-[#F4F0EA]/40 absolute left-3.5 top-3" />
+          <input
+            type="text"
+            value={searchFuncion}
+            onChange={(e) => setSearchFuncion(e.target.value)}
+            placeholder="Buscar película, evento, director(a) o sala..."
+            className="w-full pl-10 pr-8 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] placeholder-[#F4F0EA]/35 focus:outline-none focus:border-[#D91E26]"
+          />
+          {searchFuncion && (
+            <button
+              type="button"
+              onClick={() => setSearchFuncion('')}
+              className="absolute right-3 top-2.5 text-xs text-[#F4F0EA]/50 hover:text-white"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+
         <div className="space-y-5">
-          {Object.values(moviesGrouped).map((group, idx) => {
+          {filteredGroups.map((group, idx) => {
             const esEvento = group.tipo === 'evento';
             return (
               <div
@@ -629,6 +671,11 @@ export default function FuncionesView({
               </div>
             );
           })}
+          {filteredGroups.length === 0 && (
+            <div className="p-8 text-center border border-[#F4F0EA]/15 bg-[#080808] text-xs uppercase tracking-[0.16em] text-[#F4F0EA]/50">
+              No se encontraron funciones que coincidan con "{searchFuncion}".
+            </div>
+          )}
         </div>
       </div>
     </div>

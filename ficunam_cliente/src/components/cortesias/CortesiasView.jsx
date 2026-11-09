@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { User, Mail, CheckCircle2, AlertCircle, Lock, ExternalLink } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { User, Mail, CheckCircle2, AlertCircle, Lock, ExternalLink, Search } from 'lucide-react';
 import { CATEGORIAS_CORTESIA, SALAS_CCU, SENDER_EMAIL } from '../../constants/salas';
 import { formatDateSpanish, getDeadlineInfo, categoryBadgeStyle } from '../../utils/dateUtils';
 import FicunamLogo from '../artwork/FicunamLogo';
@@ -24,6 +24,24 @@ export default function CortesiasView({
   const [guestCategory, setGuestCategory] = useState('Invitados');
   const [courtesyFeedback, setCourtesyFeedback] = useState(null);
   const [sending, setSending] = useState(false);
+
+  // Buscador de película/evento en Asignar Cortesía Individual (Punto 2)
+  const [movieSearchQuery, setMovieSearchQuery] = useState('');
+
+  const filteredMovieTitles = useMemo(() => {
+    const q = movieSearchQuery
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    if (!q) return movieTitles;
+    return movieTitles.filter((title) => {
+      const group = moviesGrouped[title];
+      const titleNorm = (group?.pelicula || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const dirNorm = (group?.director || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return titleNorm.includes(q) || dirNorm.includes(q);
+    });
+  }, [movieTitles, moviesGrouped, movieSearchQuery]);
 
   const availableSchedulesForMovie =
     selectedMovieTitle && moviesGrouped[selectedMovieTitle]
@@ -173,16 +191,52 @@ export default function CortesiasView({
             </div>
           </div>
 
-          <div className="pt-2 border-t border-[#F4F0EA]/15">
-            <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80 mb-1.5">
+          {/* PUNTO 2: BUSCADOR EN ASIGNAR CORTESÍA INDIVIDUAL */}
+          <div className="pt-2 border-t border-[#F4F0EA]/15 space-y-2">
+            <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80">
               1. Seleccionar Película / Función
             </label>
+
+            <div className="relative">
+              <Search className="w-4 h-4 text-[#F4F0EA]/40 absolute left-3.5 top-3" />
+              <input
+                type="text"
+                value={movieSearchQuery}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setMovieSearchQuery(val);
+                  const q = val.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                  const firstMatch = movieTitles.find((t) => {
+                    const g = moviesGrouped[t];
+                    const tNorm = (g?.pelicula || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const dNorm = (g?.director || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    return tNorm.includes(q) || dNorm.includes(q);
+                  });
+                  if (firstMatch) onSelectMovie(firstMatch);
+                }}
+                placeholder="Buscar película, evento o director(a)..."
+                className="w-full pl-10 pr-8 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] placeholder-[#F4F0EA]/35 focus:outline-none focus:border-[#D91E26]"
+              />
+              {movieSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setMovieSearchQuery('')}
+                  className="absolute right-3 top-2.5 text-xs text-[#F4F0EA]/50 hover:text-white"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
             <select
-              value={selectedMovieTitle}
+              value={filteredMovieTitles.includes(selectedMovieTitle) ? selectedMovieTitle : (filteredMovieTitles[0] || '')}
               onChange={(e) => onSelectMovie(e.target.value)}
               className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#F4F0EA]/30 text-sm text-[#F4F0EA] focus:outline-none focus:border-[#D91E26]"
             >
-              {movieTitles.map((title) => {
+              {filteredMovieTitles.length === 0 && (
+                <option value="">No se encontraron coincidencias para "{movieSearchQuery}"</option>
+              )}
+              {filteredMovieTitles.map((title) => {
                 const group = moviesGrouped[title];
                 return (
                   <option key={title} value={title}>
