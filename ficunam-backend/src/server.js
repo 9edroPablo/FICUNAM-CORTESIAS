@@ -8,7 +8,7 @@ const Screening = require('./models/Screening');
 const Courtesy = require('./models/Courtesy');
 const { sendInvitationEmail, sendRejectionEmail, SALAS_MAP } = require('./services/mailer');
 const Venue = require('./models/Venue');
-const { sendInvitationEmail, SALAS_MAP } = require('./services/mailer');
+
 
 const app = express();
 app.use(cors());
