@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { Lock, CheckCircle2, XCircle, Send, Copy, ExternalLink, Trash2, AlertTriangle, Search } from 'lucide-react';
+import { Lock, CheckCircle2, XCircle, Send, Copy, ExternalLink, Trash2, AlertTriangle, Search, Mail, Clock } from 'lucide-react';
 import { SALAS_CCU, CATEGORIAS_CORTESIA } from './constants/salas';
 import { INITIAL_SCREENINGS, INITIAL_COURTESIES } from './data/mockData';
 import Header from './components/layout/Header';
@@ -29,8 +29,17 @@ import {
   resetAllDatabase
 } from './services/api';
 
-// Punto 1: Nuevo link oficial al catálogo de películas de FICUNAM
 const FICUNAM_CARTELERA_URL = 'https://ficunam.unam.mx/catalogo-de-peliculas-2/';
+
+// PUNTO 3: Verifica si una función ya está cerrada para solicitud pública (cierra a las 12:00 PM del mismo día de la función)
+function isClosedForPublicRequest(fechaStr) {
+  if (!fechaStr) return false;
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if (fechaStr < todayStr) return true;
+  if (fechaStr === todayStr && now.getHours() >= 12) return true;
+  return false;
+}
 
 export default function App() {
   const pathname = typeof window !== 'undefined' ? window.location.pathname : '/';
@@ -55,7 +64,7 @@ export default function App() {
   const [selectedMovieTitle, setSelectedMovieTitle] = useState('');
   const [selectedScreeningId, setSelectedScreeningId] = useState('');
 
-  // Estados para el portal público aislado (/solicitar) + Buscador de películas (Punto 2)
+  // Estados para el portal público aislado (/solicitar)
   const [pubName, setPubName] = useState('');
   const [pubEmail, setPubEmail] = useState('');
   const [pubCompany, setPubCompany] = useState('');
@@ -204,7 +213,6 @@ export default function App() {
 
   const movieTitles = useMemo(() => Object.keys(moviesGrouped), [moviesGrouped]);
 
-  // Punto 2: Filtrado en vivo de películas/eventos en el portal público (/solicitar)
   const filteredPublicMovieTitles = useMemo(() => {
     const q = pubSearchQuery
       .trim()
@@ -257,7 +265,7 @@ export default function App() {
     return <ConfirmacionInvitadoView token={guestToken} />;
   }
 
-  // 2. Portal Público de Solicitud (/solicitar) con Buscador y Nuevo Link a Catálogo
+  // 2. Portal Público de Solicitud (/solicitar)
   if (isPublicRequestRoute) {
     const effectivePubMovieTitle = filteredPublicMovieTitles.includes(pubMovieTitle)
       ? pubMovieTitle
@@ -273,11 +281,16 @@ export default function App() {
       pubAvailableSchedules[0] ||
       null;
 
+    const currentPubClosedByNoon = currentPubScreening
+      ? isClosedForPublicRequest(currentPubScreening.fecha)
+      : false;
+
     const handleSelectPubMovie = (title) => {
       setPubMovieTitle(title);
       const schedules = moviesGrouped[title]?.horarios || [];
       if (schedules.length > 0) {
-        setPubScreeningId(schedules[0].id);
+        const firstOpen = schedules.find((s) => !isClosedForPublicRequest(s.fecha)) || schedules[0];
+        setPubScreeningId(firstOpen.id);
       } else {
         setPubScreeningId('');
       }
@@ -286,6 +299,10 @@ export default function App() {
     const handlePublicSubmit = async (e) => {
       e.preventDefault();
       if (!pubName.trim() || !pubEmail.trim() || !currentPubScreening) return;
+      if (isClosedForPublicRequest(currentPubScreening.fecha)) {
+        alert('El registro para las funciones del día de hoy cerró a las 12:00 del mediodía.');
+        return;
+      }
       setPubSending(true);
       try {
         await createPublicRequest({
@@ -359,15 +376,44 @@ export default function App() {
                 <FicunamLogo variant="stamp" className="w-20 h-10 shrink-0" />
               </div>
 
+              {/* PUNTO 1: ANUNCIO MUY VISIBLE DE ENVÍO DE CORREO Y CIERRE A LAS 12:00 PM */}
+              <div className="mb-6 p-4 bg-[#D91E26]/15 border-2 border-[#D91E26] shadow-[4px_4px_0px_0px_#D91E26] space-y-2">
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-extrabold uppercase tracking-[0.14em] text-white">
+                  <Mail className="w-5 h-5 text-[#D91E26] shrink-0" />
+                  <span>Importante: Notificación por Correo Electrónico</span>
+                </div>
+                <p className="text-xs sm:text-sm text-[#F4F0EA] leading-relaxed">
+                  Si tu solicitud es <strong className="text-white underline decoration-[#D91E26]">ACEPTADA</strong> (o denegada por límite de cupo), recibirás un <strong className="text-white">correo electrónico oficial</strong> en la dirección que registres abajo. Es indispensable abrir ese correo y confirmar tu asistencia para activar tu pase.
+                </p>
+                <div className="pt-1.5 border-t border-[#D91E26]/40 flex items-center gap-2 text-[11px] text-[#F4F0EA]/90 font-semibold">
+                  <Clock className="w-3.5 h-3.5 text-[#D91E26] shrink-0" />
+                  <span>Las solicitudes para funciones del mismo día cierran a las 12:00 del mediodía.</span>
+                </div>
+              </div>
+
               {pubSubmitted ? (
-                <div className="p-6 bg-[#080808] border border-[#D91E26] space-y-4 text-center">
-                  <CheckCircle2 className="w-10 h-10 text-[#D91E26] mx-auto" />
-                  <h2 className="font-ficunam-display text-xl font-extrabold uppercase text-[#F4F0EA]">
-                    Solicitud Registrada Correctamente
+                <div className="p-6 sm:p-8 bg-[#080808] border-2 border-[#D91E26] shadow-[6px_6px_0px_0px_#D91E26] space-y-5 text-center">
+                  <CheckCircle2 className="w-12 h-12 text-[#D91E26] mx-auto" />
+                  <h2 className="font-ficunam-display text-2xl font-extrabold uppercase text-[#F4F0EA]">
+                    ¡Solicitud Recibida!
                   </h2>
-                  <p className="text-xs text-[#F4F0EA]/80 leading-relaxed max-w-md mx-auto">
-                    Tu solicitud ha sido enviada al área de Dirección Ejecutiva de FICUNAM. En caso de ser autorizada, recibirás tu invitación oficial en tu correo electrónico.
-                  </p>
+
+                  <div className="p-5 bg-[#111111] border-2 border-[#F4F0EA] text-left space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.16em] text-[#D91E26]">
+                      <Mail className="w-4 h-4" />
+                      <span>Revisa tu Correo Electrónico</span>
+                    </div>
+                    <p className="text-sm text-[#F4F0EA] leading-relaxed">
+                      En cuanto el equipo de Dirección Ejecutiva procese tu solicitud, <strong>se enviará un correo electrónico a:</strong>
+                    </p>
+                    <p className="font-mono text-sm sm:text-base font-bold text-white bg-[#080808] px-3 py-2 border border-[#D91E26] break-all">
+                      {pubEmail}
+                    </p>
+                    <p className="text-xs text-[#F4F0EA]/80 leading-relaxed pt-1">
+                      Si tu solicitud es aceptada, deberás abrir ese correo y presionar el botón <strong>"Aceptar Invitación"</strong> (revisa también tu carpeta de <em>Spam</em> o <em>Promociones</em>).
+                    </p>
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -376,9 +422,9 @@ export default function App() {
                       setPubEmail('');
                       setPubCompany('');
                     }}
-                    className="px-6 py-2.5 bg-[#F4F0EA] text-[#080808] font-bold text-xs uppercase tracking-[0.18em] border border-[#F4F0EA] shadow-[4px_4px_0px_0px_#D91E26]"
+                    className="px-6 py-3 bg-[#F4F0EA] hover:bg-white text-[#080808] font-bold text-xs uppercase tracking-[0.18em] border border-[#F4F0EA] shadow-[4px_4px_0px_0px_#D91E26]"
                   >
-                    Realizar otra solicitud
+                    Realizar otra solicitud →
                   </button>
                 </div>
               ) : (
@@ -400,7 +446,7 @@ export default function App() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80 mb-1.5">
-                        Correo electrónico *
+                        Correo electrónico (Aquí llegará tu pase) *
                       </label>
                       <input
                         type="email"
@@ -464,7 +510,6 @@ export default function App() {
                       </a>
                     </div>
 
-                    {/* Buscador en tiempo real */}
                     <div className="relative">
                       <Search className="w-4 h-4 text-[#F4F0EA]/40 absolute left-3.5 top-3" />
                       <input
@@ -518,7 +563,7 @@ export default function App() {
                     </select>
                   </div>
 
-                  {/* PASO 2: Seleccionar Día, Hora y Sala disponible */}
+                  {/* PASO 2: Seleccionar Día, Hora y Sala disponible (con bloqueo a las 12:00 PM) */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-[11px] font-bold uppercase tracking-[0.16em] text-[#F4F0EA]/80">
@@ -535,14 +580,20 @@ export default function App() {
                       {pubAvailableSchedules.map((sched) => {
                         const isSelected = currentPubScreening?.id === sched.id;
                         const dl = getDeadlineInfo(sched.fecha, sched.hora, simulatedNow);
+                        const closedNoon = isClosedForPublicRequest(sched.fecha);
+
                         return (
                           <div
                             key={sched.id}
-                            onClick={() => setPubScreeningId(sched.id)}
-                            className={`p-3.5 border cursor-pointer transition ${
-                              isSelected
-                                ? 'bg-[#D91E26]/15 border-[#D91E26]'
-                                : 'bg-[#080808] border-[#F4F0EA]/20 hover:border-[#F4F0EA]/50'
+                            onClick={() => {
+                              if (!closedNoon) setPubScreeningId(sched.id);
+                            }}
+                            className={`p-3.5 border transition ${
+                              closedNoon
+                                ? 'bg-[#080808]/50 border-zinc-800 opacity-60 cursor-not-allowed'
+                                : isSelected
+                                ? 'bg-[#D91E26]/15 border-[#D91E26] cursor-pointer'
+                                : 'bg-[#080808] border-[#F4F0EA]/20 hover:border-[#F4F0EA]/50 cursor-pointer'
                             }`}
                           >
                             <div className="flex items-center justify-between">
@@ -557,11 +608,17 @@ export default function App() {
                               {formatDateSpanish(sched.fecha)}
                             </div>
                             <div className="mt-2 flex items-center justify-between text-[11px]">
-                              <span className={dl.isExpired ? 'text-rose-400' : 'text-[#F4F0EA]/60'}>
-                                {dl.isExpired
-                                  ? 'Plazo de confirmación cerrado (-24h)'
-                                  : `Límite confirmación: ${dl.deadlineFormatted}`}
-                              </span>
+                              {closedNoon ? (
+                                <span className="text-rose-400 font-bold uppercase">
+                                  Registro cerrado (Cierre a las 12:00 PM del día de la función)
+                                </span>
+                              ) : (
+                                <span className={dl.isExpired ? 'text-rose-400' : 'text-[#F4F0EA]/60'}>
+                                  {dl.isExpired
+                                    ? 'Plazo de confirmación cerrado (-24h)'
+                                    : `Límite confirmación: ${dl.deadlineFormatted}`}
+                                </span>
+                              )}
                             </div>
                           </div>
                         );
@@ -571,11 +628,19 @@ export default function App() {
 
                   <button
                     type="submit"
-                    disabled={pubSending || !currentPubScreening}
-                    className="w-full py-3.5 px-4 bg-[#D91E26] hover:bg-[#b8161d] text-white font-bold uppercase tracking-[0.18em] text-xs transition flex items-center justify-center gap-2 border border-[#F4F0EA]/30 shadow-[4px_4px_0px_0px_#F4F0EA]"
+                    disabled={pubSending || !currentPubScreening || currentPubClosedByNoon}
+                    className={`w-full py-3.5 px-4 font-bold uppercase tracking-[0.18em] text-xs transition flex items-center justify-center gap-2 border ${
+                      pubSending || !currentPubScreening || currentPubClosedByNoon
+                        ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed'
+                        : 'bg-[#D91E26] hover:bg-[#b8161d] text-white border-[#F4F0EA]/30 shadow-[4px_4px_0px_0px_#F4F0EA]'
+                    }`}
                   >
                     <Send className="w-4 h-4" />
-                    {pubSending ? 'Enviando solicitud...' : 'Enviar Solicitud de Invitación →'}
+                    {pubSending
+                      ? 'Enviando solicitud...'
+                      : currentPubClosedByNoon
+                      ? 'Solicitudes Cerradas para Hoy (Después de las 12:00 PM)'
+                      : 'Enviar Solicitud de Invitación →'}
                   </button>
                 </form>
               )}
@@ -864,7 +929,7 @@ export default function App() {
                   Solicitudes de Cortesía Pendientes ({pendingRequests.length})
                 </h2>
                 <p className="text-xs text-[#F4F0EA]/70 mt-1">
-                  Al aceptar una solicitud se envía automáticamente la invitación por correo electrónico. Al denegarla desaparece de la lista sin notificar.
+                  Al aceptar una solicitud se envía la invitación con pase por correo. Al denegarla se envía un correo notificando que no fue aprobada.
                 </p>
               </div>
 
@@ -892,7 +957,6 @@ export default function App() {
                 {pendingRequests.map((req) => {
                   const s = screenings.find((item) => item.id === req.screeningId);
                   const sala = allSalas.find((sa) => sa.id === s?.salaId);
-                  // PUNTO 3: Obtener cupo actual y límite de la función solicitada
                   const occ = s ? occupancyByScreening[s.id] : null;
                   const usadas = occ ? occ.totalEnviadas : 0;
                   const limite = s?.limiteCortesias || occ?.aforoMax || '-';
@@ -947,7 +1011,7 @@ export default function App() {
                           className="px-3.5 py-2 bg-[#111111] hover:bg-[#D91E26] text-[#F4F0EA] hover:text-white font-bold text-xs uppercase tracking-[0.15em] border border-[#F4F0EA]/30 transition inline-flex items-center gap-1.5"
                         >
                           <XCircle className="w-4 h-4" />
-                          Denegar
+                          Denegar y Notificar
                         </button>
                       </div>
                     </div>

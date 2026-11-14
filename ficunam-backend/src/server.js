@@ -6,6 +6,7 @@ const crypto = require('crypto');
 
 const Screening = require('./models/Screening');
 const Courtesy = require('./models/Courtesy');
+const { sendInvitationEmail, sendRejectionEmail, SALAS_MAP } = require('./services/mailer');
 const Venue = require('./models/Venue');
 const { sendInvitationEmail, SALAS_MAP } = require('./services/mailer');
 
@@ -188,6 +189,18 @@ app.post('/api/public/solicitar', async (req, res) => {
     const screening = await Screening.findById(screeningId);
     if (!screening) return res.status(404).json({ error: 'Función o evento no encontrado' });
 
+    // PUNTO 3: Bloquear solicitudes para funciones de HOY si ya son las 12:00 PM o más (Hora CDMX)
+    const nowCDMX = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+    const todayStr = `${nowCDMX.getFullYear()}-${String(nowCDMX.getMonth() + 1).padStart(2, '0')}-${String(nowCDMX.getDate()).padStart(2, '0')}`;
+    if (screening.fecha === todayStr && nowCDMX.getHours() >= 12) {
+      return res.status(400).json({
+        error: 'El registro de solicitudes para las funciones de hoy cerró a las 12:00 del mediodía.'
+      });
+    }
+    if (screening.fecha < todayStr) {
+      return res.status(400).json({ error: 'Esta función ya se llevó a cabo.' });
+    }
+
     const token = crypto.randomBytes(16).toString('hex');
     const solicitud = await Courtesy.create({
       nombre: nombre.trim(),
@@ -239,8 +252,24 @@ app.patch('/api/courtesies/:id/aprobar', async (req, res) => {
 });
 
 // Denegar solicitud pública -> Se elimina de la base de datos sin enviar correo
+// PUNTO 2: Denegar solicitud pública -> Envía correo informando que fue denegada y la elimina de pendientes
 app.delete('/api/courtesies/:id/denegar', async (req, res) => {
   try {
+    const courtesy = await Courtesy.findById(req.params.id);
+    if (!courtesy) return res.status(404).json({ error: 'Solicitud no encontrada' });
+
+    // Si era una solicitud pendiente del público, enviarle correo de rechazo
+    if (courtesy.estadoSolicitud === 'solicitud_pendiente') {
+      const screening = await Screening.findById(courtesy.screeningId);
+      const extraSala = screening ? await Venue.findOne({ id: screening.salaId }) : null;
+      const salaNombre = extraSala ? extraSala.nombre : (SALAS_MAP[screening?.salaId] || screening?.salaId);
+      try {
+        await sendRejectionEmail(courtesy, screening, salaNombre);
+      } catch (mailErr) {
+        console.error('Error Brevo al enviar correo de rechazo:', mailErr.message);
+      }
+    }
+
     await Courtesy.findByIdAndDelete(req.params.id);
     res.json({ ok: true });
   } catch (err) {

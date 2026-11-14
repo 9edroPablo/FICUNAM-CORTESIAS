@@ -1,12 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Building2, MapPin, CheckCircle2, Clock, Check, Ticket } from 'lucide-react';
 import { CATEGORIAS_CORTESIA, SALAS_CCU } from '../../constants/salas';
-import { categoryBadgeStyle } from '../../utils/dateUtils';
+import { categoryBadgeStyle, formatDateSpanish } from '../../utils/dateUtils';
 
 export default function TaquillaView({ courtesies, screenings, onToggleDelivered }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterDate, setFilterDate] = useState('Todas');
   const [filterCategory, setFilterCategory] = useState('Todas');
   const [filterDelivery, setFilterDelivery] = useState('Todos');
+
+  // Extraer las fechas únicas disponibles en las funciones para el filtro por día (Punto 4)
+  const availableDates = useMemo(() => {
+    const datesSet = new Set();
+    screenings.forEach((s) => {
+      if (s.fecha) datesSet.add(s.fecha);
+    });
+    return Array.from(datesSet).sort();
+  }, [screenings]);
 
   const filteredTickets = useMemo(() => {
     return courtesies
@@ -25,6 +35,9 @@ export default function TaquillaView({ courtesies, screenings, onToggleDelivered
           item.correo.toLowerCase().includes(q) ||
           item.screening.pelicula.toLowerCase().includes(q);
 
+        const matchesDate =
+          filterDate === 'Todas' || item.screening.fecha === filterDate;
+
         const matchesCategory =
           filterCategory === 'Todas' || item.categoria === filterCategory;
 
@@ -34,9 +47,9 @@ export default function TaquillaView({ courtesies, screenings, onToggleDelivered
           (filterDelivery === 'Por entregar' && !item.entregado && item.estado === 'aceptada') ||
           (filterDelivery === 'Sin confirmar' && item.estado === 'pendiente');
 
-        return matchesQuery && matchesCategory && matchesDelivery;
+        return matchesQuery && matchesDate && matchesCategory && matchesDelivery;
       });
-  }, [courtesies, screenings, searchQuery, filterCategory, filterDelivery]);
+  }, [courtesies, screenings, searchQuery, filterDate, filterCategory, filterDelivery]);
 
   return (
     <div className="bg-[#111111] border-2 border-[#F4F0EA]/25 p-6 shadow-[6px_6px_0px_0px_#D91E26]">
@@ -70,18 +83,34 @@ export default function TaquillaView({ courtesies, screenings, onToggleDelivered
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-3 my-6">
-        <div className="md:col-span-6 relative">
+        <div className="md:col-span-4 relative">
           <Search className="w-4 h-4 text-[#D91E26] absolute left-3.5 top-3" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por nombre de la persona, empresa, medio o película..."
+            placeholder="Buscar por nombre, empresa, medio o película..."
             className="w-full pl-10 pr-4 py-2.5 bg-[#080808] border border-[#F4F0EA]/35 text-sm text-[#F4F0EA] placeholder-[#F4F0EA]/40 focus:outline-none focus:border-[#D91E26]"
           />
         </div>
 
+        {/* PUNTO 4: FILTRO POR DÍA DE LA FUNCIÓN */}
         <div className="md:col-span-3">
+          <select
+            value={filterDate}
+            onChange={(e) => setFilterDate(e.target.value)}
+            className="w-full px-3.5 py-2.5 bg-[#080808] border border-[#F4F0EA]/35 text-sm text-[#F4F0EA] focus:outline-none focus:border-[#D91E26] capitalize"
+          >
+            <option value="Todas">Todos los días</option>
+            {availableDates.map((fechaStr) => (
+              <option key={fechaStr} value={fechaStr}>
+                {formatDateSpanish(fechaStr)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="md:col-span-2">
           <select
             value={filterCategory}
             onChange={(e) => setFilterCategory(e.target.value)}
@@ -147,13 +176,14 @@ export default function TaquillaView({ courtesies, screenings, onToggleDelivered
                   <td className="py-4 px-4">
                     <div className="font-bold text-[#F4F0EA] uppercase">{item.screening.pelicula}</div>
                     <div className="text-xs text-[#F4F0EA]/60">
-                      Dir. {item.screening.director} · {item.screening.fecha} ({item.screening.hora} hrs)
+                      {item.screening.tipo !== 'evento' && item.screening.director ? `Dir. ${item.screening.director} · ` : ''}
+                      {item.screening.fecha} ({item.screening.hora} hrs)
                     </div>
                   </td>
                   <td className="py-4 px-4">
                     <span className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-[#F4F0EA] bg-[#080808] px-3 py-1.5 border border-[#F4F0EA]/25">
                       <MapPin className="w-3.5 h-3.5 text-[#D91E26]" />
-                      {item.sala?.nombre}
+                      {item.sala?.nombre || item.screening.salaId}
                     </span>
                   </td>
                   <td className="py-4 px-4">
